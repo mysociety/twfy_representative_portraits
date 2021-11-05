@@ -1,0 +1,4 @@
+Pillow==7.0.0
+everypolitician-popolo==0.0.11
+wikipedia==1.4.0
+pandas==1.1.3
