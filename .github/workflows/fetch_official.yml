@@ -2,7 +2,9 @@ name: Get official portraits
 
 on:
   workflow_dispatch:
-
+  schedule:
+  - cron: '0 8 * * 3'
+  # run wednesday at 8am
 
 jobs:
   fetch:
