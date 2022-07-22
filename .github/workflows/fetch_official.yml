@@ -1,4 +1,4 @@
-name: twfy-portrait-image-loader
+name: Get official portraits
 
 on:
   workflow_dispatch:

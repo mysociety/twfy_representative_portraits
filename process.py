@@ -20,15 +20,17 @@ previously been downloaded and discarded.
 import csv
 import json
 import re
-import sys
 import shutil
+import sys
+import time
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from tempfile import gettempdir
+from typing import Optional, Tuple
 from urllib.parse import unquote
 from urllib.request import urlopen, urlretrieve
-from typing import Optional, Tuple
+
 import pandas as pd
 import requests
 import wikipedia
@@ -371,7 +373,15 @@ def download_and_resize(
     temp_path = Path(gettempdir(), f"{mp_id}.jpg")
     image_url = image_format.format(mp_id)
     api_url = f"https://members-api.parliament.uk/api/Members/{mp_id}"
-    api_results = json.loads(urlopen(api_url).read())
+    attempts = 0
+    api_results = None
+    while attempts <= 5 and api_results is None:
+        try:
+            api_results = json.loads(urlopen(api_url).read())
+        except Exception as e:
+            print("API fetch error, sleeping and retrying")
+            attempts += 1
+            time.sleep(5)
     thumbnail_url = api_results["value"].get("thumbnailUrl", "")
     if "members-api" not in thumbnail_url:
         print("no offical portrait")
