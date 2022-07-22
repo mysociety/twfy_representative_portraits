@@ -23,9 +23,17 @@ jobs:
           pip install -r requirements.txt
           
       - name: execute py script
-        run: python process.py fetch_official
+        run: python process.py fetch_official_all prepare
 
       - name: Push new data
+        id: auto-commit-action
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "Fetched official data"
+
+      - name: Send GitHub Action trigger data to Slack workflow
+        if: steps.auto-commit-action.outputs.changes_detected == 'true'
+        id: slack
+        uses: slackapi/slack-github-action@v1.19.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
