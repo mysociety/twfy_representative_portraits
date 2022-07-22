@@ -1,12 +1,11 @@
 name: twfy-portrait-image-loader
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+
 
 jobs:
-  build:
+  fetch:
     runs-on: ubuntu-latest
     steps:
 
@@ -24,9 +23,9 @@ jobs:
           pip install -r requirements.txt
           
       - name: execute py script
-        run: python process.py manual
+        run: python process.py fetch_official
 
       - name: Push new data
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "Resized manual image"
+          commit_message: "Fetched official data"
