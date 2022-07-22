@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-'''
+"""
 Downloads thumbnails
 of MPs from parliament API and wikipedia.
 
@@ -15,7 +15,7 @@ Does four passes:
 Wikipedia images consult an image list to make sure they haven't
 previously been downloaded and discarded.
 
-'''
+"""
 
 import csv
 import json
@@ -95,7 +95,7 @@ SELECT DISTINCT ?person ?personLabel ?givenLabel ?familyLabel ?twfy_id ?article 
 } 
 """
 
-WIKI_REQUEST = 'http://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles='
+WIKI_REQUEST = "http://en.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&titles="
 
 
 def download_manual_attrib():
@@ -117,13 +117,15 @@ def combine_attribs():
     legacy["source"] = "legacy"
 
     # get wiki data sources
-    wiki = pd.read_csv(
-        Path("source", "attrib", "wikidata_sources_with_attrib.csv"))
+    wiki = pd.read_csv(Path("source", "attrib", "wikidata_sources_with_attrib.csv"))
     wiki = wiki[["id", "licence", "urls"]]
-    wiki = wiki.rename(columns={
-                       "id": "person_id",
-                       "licence": "photo_attribution_text",
-                       "urls": "photo_attribution_link"})
+    wiki = wiki.rename(
+        columns={
+            "id": "person_id",
+            "licence": "photo_attribution_text",
+            "urls": "photo_attribution_link",
+        }
+    )
     wiki["source"] = "wikipedia"
 
     # get parliament sources
@@ -135,16 +137,18 @@ def combine_attribs():
     man["source"] = "manual"
 
     # combine and convert to long data format
-    df = (pd.concat([parl, wiki, legacy, man])
-            .drop(columns=["source"])
-            .melt("person_id", var_name="data_key", value_name="data_value")
-            .loc[lambda df: ~df["data_value"].isna()])
+    df = (
+        pd.concat([parl, wiki, legacy, man])
+        .drop(columns=["source"])
+        .melt("person_id", var_name="data_key", value_name="data_value")
+        .loc[lambda df: ~df["data_value"].isna()]
+    )
 
     df.to_json(Path("web", "attribution.json"), orient="records")
 
 
 def clean_name(name: str):
-    return re.sub('[^A-Za-z0-9]+', '', name).lower()
+    return re.sub("[^A-Za-z0-9]+", "", name).lower()
 
 
 @lru_cache
@@ -164,12 +168,11 @@ def get_image_from_wikipedia(page: str):
     unescaped = unquote(page)
     wkpage = wikipedia.WikipediaPage(title=unescaped)
     title = wkpage.title
-    response = requests.get(WIKI_REQUEST+title)
+    response = requests.get(WIKI_REQUEST + title)
     json_data = json.loads(response.text)
     print("getting image url from wikipedia")
     try:
-        img_link = list(json_data['query']['pages'].values())[
-            0]['original']['source']
+        img_link = list(json_data["query"]["pages"].values())[0]["original"]["source"]
         return img_link
     except KeyError:
         return None
@@ -179,10 +182,11 @@ def get_wikipedia():
     """
     get wikipedia images based in twfy_ids in wikidata
     """
-    url = 'https://query.wikidata.org/sparql'
+    url = "https://query.wikidata.org/sparql"
 
     r = requests.get(
-        url, params={'format': 'json', 'query': wikidata_to_wikipedia_query})
+        url, params={"format": "json", "query": wikidata_to_wikipedia_query}
+    )
     data = r.json()
     for person in data["results"]["bindings"]:
         twfy_id = person["twfy_id"]["value"]
@@ -199,11 +203,10 @@ def get_idless_wikipedia(override: bool = False):
     """
     get images where there is a direct name but not id match in wikipedia
     """
-    url = 'https://query.wikidata.org/sparql'
+    url = "https://query.wikidata.org/sparql"
     twfy_name_to_id = get_name_to_id_lookup()
     print("getting query")
-    r = requests.get(
-        url, params={'format': 'json', 'query': unided_wikipedia_query})
+    r = requests.get(url, params={"format": "json", "query": unided_wikipedia_query})
     data = r.json()
     print("fetched query")
     for person in data["results"]["bindings"]:
@@ -216,8 +219,7 @@ def get_idless_wikipedia(override: bool = False):
         joined = given + " " + family
         full_label = clean_name(full_label)
         alt_label = clean_name(joined)
-        twfy_id = twfy_name_to_id.get(
-            full_label, twfy_name_to_id.get(alt_label, None))
+        twfy_id = twfy_name_to_id.get(full_label, twfy_name_to_id.get(alt_label, None))
         if twfy_id and "article" in person:
             twfy_id = twfy_id.split("/")[-1]
             print(twfy_id, person["article"]["value"])
@@ -238,9 +240,9 @@ def get_wikidata():
     download images stored in wikidata by twfy_id
     - lower priority as less well updated than wikipedia
     """
-    url = 'https://query.wikidata.org/sparql'
+    url = "https://query.wikidata.org/sparql"
 
-    r = requests.get(url, params={'format': 'json', 'query': wikidata_query})
+    r = requests.get(url, params={"format": "json", "query": wikidata_query})
     data = r.json()
     for person in data["results"]["bindings"]:
         twfy_id = person["twfy_id"]["value"]
@@ -248,9 +250,7 @@ def get_wikidata():
         get_wiki_image(image_url, twfy_id)
 
 
-def get_wiki_image(image_url: str,
-                   twfy_id: int,
-                   override: Optional[bool] = False):
+def get_wiki_image(image_url: str, twfy_id: int, override: Optional[bool] = False):
     """
     given an image on wikipedia, download
     """
@@ -288,7 +288,7 @@ def store_wiki_source(image_url, twfy_id):
     """
     add the source for this image to the cache
     """
-    with open(Path("source", "wikidata_sources.csv"), 'a', newline='') as f:
+    with open(Path("source", "wikidata_sources.csv"), "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([twfy_id, image_url, 0])
 
@@ -315,8 +315,7 @@ def get_name_to_id_lookup():
         for name in p.other_names:
             possible_names = []
             if "given_name" in name and "family_name" in name:
-                possible_names.append(
-                    name["given_name"] + " " + name["family_name"])
+                possible_names.append(name["given_name"] + " " + name["family_name"])
             if "additional_name" in name:
                 possible_names.append(name["additional_name"])
 
@@ -355,12 +354,14 @@ def get_id_lookup() -> dict:
     return lookup
 
 
-image_format = "https://members-api.parliament.uk/api/Members/{0}/Portrait?CropType=ThreeFour"
+image_format = (
+    "https://members-api.parliament.uk/api/Members/{0}/Portrait?CropType=ThreeFour"
+)
 
 
-def download_and_resize(mp_id: int,
-                        parlparse: str,
-                        override: Optional[bool] = False) -> str:
+def download_and_resize(
+    mp_id: int, parlparse: str, override: Optional[bool] = False
+) -> str:
     """
     download and retrieve the three-four sized
     offical portrait
@@ -409,7 +410,7 @@ def get_official_images(override: Optional[bool] = False):
                 urls.append(url)
                 ids.append(parlparse)
 
-    df = pd.DataFrame({"person_id": ids,  "photo_attribution_link": urls})
+    df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
     df["photo_attribution_text"] = "© Parliament (CC-BY 3.0)"
     df.to_csv(Path("source", "attrib", "parliament_attrib.csv"), index=False)
 
@@ -500,7 +501,7 @@ def copy_legacy():
 
     for f in ["mps", "mpsL"]:
         source = legacy / f
-        dest = web/f
+        dest = web / f
         shutil.copytree(source, dest, dirs_exist_ok=True)
 
 
