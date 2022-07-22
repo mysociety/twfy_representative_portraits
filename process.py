@@ -391,7 +391,7 @@ def download_and_resize(
     return image_url
 
 
-def get_official_images(override: Optional[bool] = False):
+def get_official_images(override: bool = False):
     """
     fetch image if available from offical source
     """
@@ -535,6 +535,8 @@ if __name__ == "__main__":
 
     if arg_test("fetch_all", "fetch_official"):
         get_official_images()
+    if arg_test("fetch_official_all"):
+        get_official_images(override=True)
     if arg_test("fetch_all", "fetch_wiki"):
         get_wikipedia()
         get_idless_wikipedia()
