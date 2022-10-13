@@ -139,7 +139,7 @@ def combine_attribs():
     man["source"] = "manual"
 
     # combine and convert to long data format
-    df = (
+    df = (  # type: ignore
         pd.concat([parl, wiki, legacy, man])
         .drop(columns=["source"])
         .melt("person_id", var_name="data_key", value_name="data_value")
@@ -259,7 +259,7 @@ def get_wiki_image(image_url: str, twfy_id: int, override: Optional[bool] = Fals
     banned = get_banned_wikidata()
     if image_url in banned:
         return None
-    ext = image_url.split(".")[-1]
+    ext = image_url.split(".")[-1].lower()
     dest_ext = ext
     if dest_ext.lower() in ["gif"]:
         dest_ext = "jpg"
@@ -363,7 +363,7 @@ image_format = (
 
 def download_and_resize(
     mp_id: int, parlparse: str, override: Optional[bool] = False
-) -> str:
+) -> str | None:
     """
     download and retrieve the three-four sized
     offical portrait
@@ -382,6 +382,8 @@ def download_and_resize(
             print("API fetch error, sleeping and retrying")
             attempts += 1
             time.sleep(5)
+    if api_results is None:
+        raise ValueError("API Fetch Error")
     thumbnail_url = api_results["value"].get("thumbnailUrl", "")
     if "members-api" not in thumbnail_url:
         print("no offical portrait")
@@ -425,7 +427,7 @@ def get_official_images(override: bool = False):
     df.to_csv(Path("source", "attrib", "parliament_attrib.csv"), index=False)
 
 
-def ids_from_directory(dir: str) -> set:
+def ids_from_directory(dir: Path) -> set:
     """
     get twfy ids used in images in this dir
     """
@@ -451,7 +453,7 @@ def overlap_report():
     print(f"Big but not small: {len(missing_small)}")
 
 
-def pad_to_size(image: Image, size: Tuple[int, int]) -> Image:
+def pad_to_size(image: Image.Image, size: Tuple[int, int]) -> Image.Image:
     """
     resize images and add padding to get to right size.
     """
@@ -502,6 +504,18 @@ def prefer_jpg(folder: Path):
             jpeg.unlink()
 
 
+def prefer_lower_case(folder: Path):
+    """
+    If a directory has "jpg" and "jpeg"
+    remove "jpeg"
+    """
+    formats = ["PNG", "JPEG", "JPG"]
+    for file_format in formats:
+        for f in folder.glob(f"*.{file_format}"):
+            print(f"renaming {f.name} with uppercase extention")
+            f.rename(f.with_suffix(f".{file_format.lower()}"))
+
+
 def copy_legacy():
     """
     Copy files present before this system as a base
@@ -521,6 +535,17 @@ def prepare_images(manual_only: Optional[bool] = False):
     from source folders
     """
     download_manual_attrib()
+
+    # rename to lower case
+    for f in [
+        official_image_folder,
+        wikidata_image_folder,
+        manual_image_folder,
+        large_image_folder,
+        small_image_folder,
+    ]:
+        prefer_lower_case(f)
+
     if manual_only is False:
         copy_legacy()
         make_large_from_folder(wikidata_image_folder)
