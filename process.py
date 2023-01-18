@@ -34,7 +34,7 @@ from urllib.request import urlopen, urlretrieve
 import pandas as pd
 import requests
 import wikipedia
-from PIL import Image
+from PIL import Image, ExifTags
 from popolo_data.importer import Popolo
 
 small_image_folder = Path("web", "mps")
@@ -474,6 +474,23 @@ def downsize(image_path: Path, only_small: Optional[bool] = False):
     small_path = small_image_folder / filename
     large_path = large_image_folder / filename
     image = Image.open(image_path)
+
+    # respect EXIF tags on rotation
+    reverse_tags = dict((v, k) for k, v in ExifTags.TAGS.items())
+    orientation = reverse_tags["Orientation"]
+
+    exif = image.getexif()
+    if orientation in exif:
+        if exif[orientation] == 3:
+            print("Rotating 180")
+            image = image.rotate(180, expand=True)
+        elif exif[orientation] == 6:
+            print("Rotating 270")
+            image = image.rotate(270, expand=True)
+        elif exif[orientation] == 8:
+            print("Rotating 90")
+            image = image.rotate(90, expand=True)
+
     if only_small is False:
         large_image = pad_to_size(image, (120, 160))
         large_image.save(large_path, quality=95)
