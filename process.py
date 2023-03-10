@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 import time
+from xml.etree import ElementTree
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -39,7 +40,8 @@ from popolo_data.importer import Popolo
 
 small_image_folder = Path("web", "mps")
 large_image_folder = Path("web", "mpsL")
-official_image_folder = Path("source", "mpsOfficial")
+uk_parl_image_folder = Path("source", "mpsOfficial")
+welsh_parl_image_folder = Path("source", "welshOfficial")
 wikidata_image_folder = Path("source", "mpsWikidata")
 manual_image_folder = Path("source", "manual")
 
@@ -133,6 +135,10 @@ def combine_attribs():
     # get parliament sources
     parl = pd.read_csv(Path("source", "attrib", "parliament_attrib.csv"))
     parl["source"] = "parliament"
+
+    # get Senedd sources
+    parl = pd.read_csv(Path("source", "attrib", "senedd_attrib.csv"))
+    parl["source"] = "senedd"
 
     # get manual sources
     man = pd.read_csv(Path("source", "attrib", "manual_attrib.csv"))
@@ -266,8 +272,8 @@ def get_wiki_image(image_url: str, twfy_id: int, override: Optional[bool] = Fals
     if ext in ["svg", "pdf", "tif"]:  # coat of arms or something
         return None
     filename = "{0}.{1}".format(twfy_id, ext)
-    official_filename = official_image_folder / "{0}.jpg".format(twfy_id)
-    if official_filename.exists():
+    uk_parl_filename = uk_parl_image_folder / "{0}.jpg".format(twfy_id)
+    if uk_parl_filename.exists():
         return None
     temp_path = Path(gettempdir(), filename)
     dest_path = wikidata_image_folder / filename
@@ -336,10 +342,10 @@ def get_name_to_id_lookup():
     return lookup
 
 
-def get_id_lookup() -> dict:
+def get_id_lookup(scheme: str) -> dict:
     """
     create id lookup from popolo file
-    convert datadotparl_id to parlparse
+    convert scheme ID to parlparse
     """
     people_url = "https://github.com/mysociety/parlparse/raw/master/members/people.json"
     pop = Popolo.from_url(people_url)
@@ -348,9 +354,9 @@ def get_id_lookup() -> dict:
     print("Creating id lookup")
     for p in pop.persons:
         id = p.id
-        datadotparl = p.identifier_value("datadotparl_id")
-        if datadotparl:
-            lookup[datadotparl] = id[-5:]
+        identifier = p.identifier_value(scheme)
+        if identifier:
+            lookup[identifier] = id[-5:]
             count += 1
     print(count, len(pop.persons))
     return lookup
@@ -369,7 +375,7 @@ def download_and_resize(
     offical portrait
     """
     filename = f"{parlparse}.jpg"
-    vlarge_path = official_image_folder / filename
+    vlarge_path = uk_parl_image_folder / filename
     temp_path = Path(gettempdir(), f"{mp_id}.jpg")
     image_url = image_format.format(mp_id)
     api_url = f"https://members-api.parliament.uk/api/Members/{mp_id}"
@@ -403,11 +409,11 @@ def download_and_resize(
     return image_url
 
 
-def get_official_images(override: bool = False):
+def get_uk_parl_images(override: bool = False):
     """
     fetch image if available from offical source
     """
-    lookup = get_id_lookup()
+    lookup = get_id_lookup("datadotparl_id")
 
     urls = []
     ids = []
@@ -415,8 +421,8 @@ def get_official_images(override: bool = False):
     for datadotparl, parlparse in lookup.items():
         print(datadotparl, parlparse)
         filename = f"{parlparse}.jpg"
-        official_path = official_image_folder / filename
-        if official_path.exists() is False or override:
+        uk_parl_path = uk_parl_image_folder / filename
+        if uk_parl_path.exists() is False or override:
             url = download_and_resize(datadotparl, parlparse, override)
             if url:
                 urls.append(url)
@@ -425,6 +431,34 @@ def get_official_images(override: bool = False):
     df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
     df["photo_attribution_text"] = "© Parliament (CC-BY 3.0)"
     df.to_csv(Path("source", "attrib", "parliament_attrib.csv"), index=False)
+
+
+def get_welsh_parl_images(override: bool = False):
+    """
+    fetch image if available from offical source
+    """
+    lookup = get_id_lookup("senedd")
+
+    urls = []
+    ids = []
+
+    api_url = 'https://business.senedd.wales/mgwebservice.asmx/GetCouncillorsByWard'
+    api_results = ElementTree.parse(urlopen(api_url))
+    for item in api_results.findall('.//councillor'):
+        id = item.find('councillorid').text
+        parlparse = lookup[id]
+        print(id, parlparse)
+        image_url = item.find('photobigurl').text
+        filename = f"{parlparse}.jpeg"
+        welsh_parl_path = welsh_parl_image_folder / filename
+        if welsh_parl_path.exists() is False or override:
+            urlretrieve(image_url, welsh_parl_path)
+            urls.append(image_url)
+            ids.append(parlparse)
+
+    df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
+    df["photo_attribution_text"] = "© Senedd (CC-BY 4.0)"
+    df.to_csv(Path("source", "attrib", "senedd_attrib.csv"), index=False)
 
 
 def ids_from_directory(dir: Path) -> set:
@@ -441,7 +475,7 @@ def overlap_report():
     there are still small images
     """
 
-    big = ids_from_directory(official_image_folder)
+    big = ids_from_directory(uk_parl_image_folder)
     wikidata = ids_from_directory(wikidata_image_folder)
     big.update(wikidata)
     small = ids_from_directory(small_image_folder)
@@ -523,8 +557,7 @@ def prefer_jpg(folder: Path):
 
 def prefer_lower_case(folder: Path):
     """
-    If a directory has "jpg" and "jpeg"
-    remove "jpeg"
+    Rename image suffixes to lowercase
     """
     formats = ["PNG", "JPEG", "JPG"]
     for file_format in formats:
@@ -555,7 +588,8 @@ def prepare_images(manual_only: Optional[bool] = False):
 
     # rename to lower case
     for f in [
-        official_image_folder,
+        uk_parl_image_folder,
+        welsh_parl_image_folder,
         wikidata_image_folder,
         manual_image_folder,
         large_image_folder,
@@ -566,7 +600,8 @@ def prepare_images(manual_only: Optional[bool] = False):
     if manual_only is False:
         copy_legacy()
         make_large_from_folder(wikidata_image_folder)
-        make_large_from_folder(official_image_folder)
+        make_large_from_folder(welsh_parl_image_folder)
+        make_large_from_folder(uk_parl_image_folder)
     make_large_from_folder(manual_image_folder)
     prefer_jpg(large_image_folder)
     prefer_jpg(small_image_folder)
@@ -585,10 +620,13 @@ if __name__ == "__main__":
                 return True
         return False
 
-    if arg_test("fetch_all", "fetch_official"):
-        get_official_images()
+    if arg_test("fetch_all", "fetch_uk_parl"):
+        get_uk_parl_images()
+    if arg_test("fetch_all", "fetch_welsh_parl"):
+        get_welsh_parl_images()
     if arg_test("fetch_official_all"):
-        get_official_images(override=True)
+        get_uk_parl_images(override=True)
+        get_welsh_parl_images(override=True)
     if arg_test("fetch_all", "fetch_wiki"):
         get_wikipedia()
         get_idless_wikipedia()
