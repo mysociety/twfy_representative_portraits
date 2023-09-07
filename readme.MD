@@ -32,3 +32,15 @@ The priority order of what is included (from highest to lowest): Manual, Parliam
 To update attribution, run `download_wikidata_attrib.py` and then tidy up `source\attrib\wikidata_sources_with_attrib.csv`. Run the `combine_attributes` notebook to review how this is merged into `attribution.json`.
 
 To add attribution details for manually added images, modify https://docs.google.com/spreadsheets/d/11QYlZEh3xGsRjw-2i3ackqdV_ECki80-Xae6MAN-eJs/edit#gid=0
+
+## Uploading a manual image through GitHub
+
+Images in the `manual` folder take priority over other sources. You can add images to this folder through GitHub. 
+
+* Name the file on your computer '{mp_person_number}.jpg' or similar (e.g. 13956.jpg)
+* Go to https://github.com/mysociety/twfy_representative_portraits/tree/main/source/manual
+* CLick Add file > Upload files
+* Drag and drop file or select your file.
+* Make a note in the commit box of what you are adding/changing and why.
+* A github action will then run to resize the image.  After a few minutes, you should see a new commit saying 'Resized manual image'.  Clicking this commit [(example)](https://github.com/mysociety/twfy_representative_portraits/commit/2c2609971cab584a8740c0fcb03f502d4f6bc938) will show the change that has been made. 
+* At this point, next time a deveoloper redeploys TheyWorkForYou - the new image will be loaded. 
