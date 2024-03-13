@@ -74,6 +74,7 @@ person_id,photo_attribution_link,photo_attribution_text
 10212,https://members-api.parliament.uk/api/Members/315/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 10213,https://members-api.parliament.uk/api/Members/223/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 10217,https://members-api.parliament.uk/api/Members/87/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
+10218,https://members-api.parliament.uk/api/Members/609/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 10219,https://members-api.parliament.uk/api/Members/184/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 10220,https://members-api.parliament.uk/api/Members/146/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 10225,https://members-api.parliament.uk/api/Members/111/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
@@ -1490,3 +1491,4 @@ person_id,photo_attribution_link,photo_attribution_text
 26277,https://members-api.parliament.uk/api/Members/5001/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 26278,https://members-api.parliament.uk/api/Members/5000/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
 26283,https://members-api.parliament.uk/api/Members/5005/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
+26288,https://members-api.parliament.uk/api/Members/5011/Portrait?CropType=ThreeFour,© Parliament (CC-BY 3.0)
