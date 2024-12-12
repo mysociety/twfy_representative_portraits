@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "twfy-representative-portraits"
+version = "0.1.0"
+description = "Manage portrait source downloads"
+authors = ["Alex Parsons <alex.parsons@mysociety.org>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pillow = "7.0.0"
+wikipedia = "1.4.0"
+pandas = "1.4.2"
+numpy = "1.26.4"
+mysoc-validator = "^0.10.0"
+requests = "^2.32.3"
+tqdm = "^4.67.1"
+
+[tool.poetry.scripts]
+portrait = "twfy_representative_portraits.__main__:app"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
