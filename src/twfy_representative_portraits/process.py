@@ -10,7 +10,7 @@ Does four passes:
 3. Wikipedia images where joined on name
 4. Wikidata images where there is a twfy_id
 
-4 overlaps with 2, but with older images so deprioritised. 
+4 overlaps with 2, but with older images so deprioritised.
 
 Wikipedia images consult an image list to make sure they haven't
 previously been downloaded and discarded.
@@ -31,12 +31,14 @@ from tempfile import gettempdir
 from typing import Optional, Tuple
 from urllib.parse import unquote
 from urllib.request import urlopen, urlretrieve
+import requests
 
 import pandas as pd
-import requests
 import wikipedia
 from PIL import Image, ExifTags
-from popolo_data.importer import Popolo
+from mysoc_validator import Popolo
+from mysoc_validator.models.popolo import IdentifierScheme
+from tqdm import tqdm
 
 small_image_folder = Path("web", "mps")
 large_image_folder = Path("web", "mpsL")
@@ -178,7 +180,6 @@ def get_image_from_wikipedia(page: str):
     title = wkpage.title
     response = requests.get(WIKI_REQUEST + title)
     json_data = json.loads(response.text)
-    print("getting image url from wikipedia")
     try:
         img_link = list(json_data["query"]["pages"].values())[0]["original"]["source"]
         return img_link
@@ -201,7 +202,6 @@ def get_wikipedia():
         if "article" in person:
             wikipedia_url = person["article"]["value"]
             wikipedia_title = wikipedia_url.split("/")[-1]
-            print(wikipedia_title)
             image_url = get_image_from_wikipedia(wikipedia_title)
             if image_url:
                 get_wiki_image(image_url, twfy_id)
@@ -213,11 +213,9 @@ def get_idless_wikipedia(override: bool = False):
     """
     url = "https://query.wikidata.org/sparql"
     twfy_name_to_id = get_name_to_id_lookup()
-    print("getting query")
     r = requests.get(url, params={"format": "json", "query": unided_wikipedia_query})
     data = r.json()
-    print("fetched query")
-    for person in data["results"]["bindings"]:
+    for person in tqdm(data["results"]["bindings"], desc="idless wikidata"):
         twfy_id = person.get("twfy_id", {"value": None})["value"]
         if twfy_id:
             continue
@@ -230,17 +228,14 @@ def get_idless_wikipedia(override: bool = False):
         twfy_id = twfy_name_to_id.get(full_label, twfy_name_to_id.get(alt_label, None))
         if twfy_id and "article" in person:
             twfy_id = twfy_id.split("/")[-1]
-            print(twfy_id, person["article"]["value"])
             wikipedia_url = person["article"]["value"]
             wikipedia_title = wikipedia_url.split("/")[-1]
-            print(wikipedia_title)
             dest_path = wikidata_image_folder / "{0}.jpg".format(twfy_id)
-            if override == False and dest_path.exists():
-                print("downloaded, skipping")
+            if override is False and dest_path.exists():
                 continue
             image_url = get_image_from_wikipedia(wikipedia_title)
             if image_url:
-                get_wiki_image(image_url, twfy_id)
+                get_wiki_image(image_url, int(twfy_id))
 
 
 def get_wikidata():
@@ -277,7 +272,7 @@ def get_wiki_image(image_url: str, twfy_id: int, override: Optional[bool] = Fals
         return None
     temp_path = Path(gettempdir(), filename)
     dest_path = wikidata_image_folder / filename
-    if override == False and dest_path.exists():
+    if override is False and dest_path.exists():
         return None
     urlretrieve(image_url, temp_path)
     print("downloaded: {0}".format(image_url))
@@ -301,37 +296,31 @@ def store_wiki_source(image_url, twfy_id):
         writer.writerow([twfy_id, image_url, 0])
 
 
-def get_name_to_id_lookup():
+@lru_cache
+def get_popolo():
+    return Popolo.from_parlparse()
+
+
+def get_name_to_id_lookup() -> dict[str, str]:
     """
     create id lookup from popolo file
     where someone's name is unique
     try and map to twfy id
     """
-    people_url = "https://github.com/mysociety/parlparse/raw/master/members/people.json"
-    pop = Popolo.from_url(people_url)
-    count = 0
+    pop = get_popolo()
     lookup = {}
     print("Creating name to id lookup")
     all_names = []
 
-    def add_name(reduced_name, id):
-        all_names.append(reduced_name)
-        lookup[reduced_name] = id
-
     for p in pop.persons:
-        id = p.id
-        for name in p.other_names:
-            possible_names = []
-            if "given_name" in name and "family_name" in name:
-                possible_names.append(name["given_name"] + " " + name["family_name"])
-            if "additional_name" in name:
-                possible_names.append(name["additional_name"])
-
-            # only add one copy of each reduced name
-            possible_names = [clean_name(x).lower() for x in possible_names]
-            possible_names = list(set(possible_names))
-            for p in possible_names:
-                add_name(p, id)
+        person_names = []
+        p_id = p.id.split("/")[-1]
+        for name in p.names:
+            nn = clean_name(name.nice_name()).lower()
+            lookup[nn] = p_id
+            person_names.append(nn)
+        person_names = list(set(person_names))
+        all_names.extend(person_names)
 
     # if the same name leads to multiple ids, delete
     c = Counter(all_names)
@@ -339,26 +328,6 @@ def get_name_to_id_lookup():
         if v > 1:
             del lookup[k]
 
-    return lookup
-
-
-def get_id_lookup(scheme: str) -> dict:
-    """
-    create id lookup from popolo file
-    convert scheme ID to parlparse
-    """
-    people_url = "https://github.com/mysociety/parlparse/raw/master/members/people.json"
-    pop = Popolo.from_url(people_url)
-    count = 0
-    lookup = {}
-    print("Creating id lookup")
-    for p in pop.persons:
-        id = p.id
-        identifier = p.identifier_value(scheme)
-        if identifier:
-            lookup[identifier] = id[-5:]
-            count += 1
-    print(count, len(pop.persons))
     return lookup
 
 
@@ -384,7 +353,7 @@ def download_and_resize(
     while attempts <= 5 and api_results is None:
         try:
             api_results = json.loads(urlopen(api_url).read())
-        except Exception as e:
+        except Exception:
             print("API fetch error, sleeping and retrying")
             attempts += 1
             time.sleep(5)
@@ -392,7 +361,7 @@ def download_and_resize(
         raise ValueError("API Fetch Error")
     thumbnail_url = api_results["value"].get("thumbnailUrl", "")
     if "members-api" not in thumbnail_url:
-        print("no offical portrait")
+        # no official portrait
         return None
     try:
         urlretrieve(image_url, temp_path)
@@ -409,46 +378,77 @@ def download_and_resize(
     return image_url
 
 
+def get_identifier_lookup(scheme: str) -> dict[str, str]:
+    # get relevant identifers
+    pop = get_popolo()
+    lookup = {}
+    for p in pop.persons:
+        result = p.get_identifier(scheme=scheme)
+        if result:
+            lookup[result] = p.id.split("/")[-1]
+    return lookup
+
+
 def get_uk_parl_images(override: bool = False):
     """
     fetch image if available from offical source
     """
-    lookup = get_id_lookup("datadotparl_id")
+
+    lookup = get_identifier_lookup(IdentifierScheme.DATADOTPARL)
 
     urls = []
     ids = []
 
-    for datadotparl, parlparse in lookup.items():
-        print(datadotparl, parlparse)
+    for datadotparl, parlparse in tqdm(
+        lookup.items(), desc="getting parliament portraits"
+    ):
         filename = f"{parlparse}.jpg"
         uk_parl_path = uk_parl_image_folder / filename
         if uk_parl_path.exists() is False or override:
-            url = download_and_resize(datadotparl, parlparse, override)
+            url = download_and_resize(int(datadotparl), parlparse, override)
             if url:
                 urls.append(url)
                 ids.append(parlparse)
 
+    attrib_path = Path("source", "attrib", "parliament_attrib.csv")
     df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
+    if attrib_path:
+        old_df = pd.read_csv(attrib_path)
+        df = pd.concat([old_df, df])
     df["photo_attribution_text"] = "© Parliament (CC-BY 3.0)"
-    df.to_csv(Path("source", "attrib", "parliament_attrib.csv"), index=False)
+    # remove duplicates on person_id
+    df = df.drop_duplicates(subset=["person_id"])
+    df.to_csv(attrib_path, index=False)
+
+
+def get_text_from_element(e: ElementTree.Element | None) -> str:
+    if e is None:
+        raise ValueError("Element missing")
+    txt = e.text
+    if txt is None:
+        raise ValueError("Element has no text")
+    return txt
 
 
 def get_welsh_parl_images(override: bool = False):
     """
-    fetch image if available from offical source
+    Fetch image if available from offical source
     """
-    lookup = get_id_lookup("senedd")
+    lookup = get_identifier_lookup("senedd")
 
     urls = []
     ids = []
 
-    api_url = 'https://business.senedd.wales/mgwebservice.asmx/GetCouncillorsByWard'
-    api_results = ElementTree.parse(urlopen(api_url))
-    for item in api_results.findall('.//councillor'):
-        id = item.find('councillorid').text
+    api_url = "https://business.senedd.wales/mgwebservice.asmx/GetCouncillorsByWard"
+    headers = {"User-Agent": "twfy-portrait-bot"}
+    response = requests.get(api_url, headers=headers)
+    api_results = ElementTree.fromstring(response.text)
+    for item in tqdm(
+        api_results.findall(".//councillor"), desc="Getting Senedd Portraits"
+    ):
+        id = get_text_from_element(item.find("councillorid"))
         parlparse = lookup[id]
-        print(id, parlparse)
-        image_url = item.find('photobigurl').text
+        image_url = get_text_from_element(item.find("photobigurl"))
         filename = f"{parlparse}.jpeg"
         welsh_parl_path = welsh_parl_image_folder / filename
         if welsh_parl_path.exists() is False or override:
@@ -456,9 +456,15 @@ def get_welsh_parl_images(override: bool = False):
             urls.append(image_url)
             ids.append(parlparse)
 
+    attrib_path = Path("source", "attrib", "senedd_attrib.csv")
     df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
+    if attrib_path:
+        old_df = pd.read_csv(attrib_path)
+        df = pd.concat([old_df, df])
     df["photo_attribution_text"] = "© Senedd (CC-BY 4.0)"
-    df.to_csv(Path("source", "attrib", "senedd_attrib.csv"), index=False)
+    # remove duplicates on person_id
+    df = df.drop_duplicates(subset=["person_id"])
+    df.to_csv(attrib_path, index=False)
 
 
 def ids_from_directory(dir: Path) -> set:
@@ -491,7 +497,7 @@ def pad_to_size(image: Image.Image, size: Tuple[int, int]) -> Image.Image:
     """
     resize images and add padding to get to right size.
     """
-    final = Image.new(image.mode, size, "white")
+    final = Image.new(image.mode, size, "white")  # type: ignore
     thumbnail = image.copy()
     thumbnail.thumbnail(size, resample=Image.ANTIALIAS)
     final.paste(thumbnail)
@@ -503,7 +509,6 @@ def downsize(image_path: Path, only_small: Optional[bool] = False):
     downsize a particular image to the small and big
     folders
     """
-    print(image_path)
     filename = image_path.name
     small_path = small_image_folder / filename
     large_path = large_image_folder / filename
@@ -516,13 +521,10 @@ def downsize(image_path: Path, only_small: Optional[bool] = False):
     exif = image.getexif()
     if orientation in exif:
         if exif[orientation] == 3:
-            print("Rotating 180")
             image = image.rotate(180, expand=True)
         elif exif[orientation] == 6:
-            print("Rotating 270")
             image = image.rotate(270, expand=True)
         elif exif[orientation] == 8:
-            print("Rotating 90")
             image = image.rotate(90, expand=True)
 
     if only_small is False:
@@ -562,7 +564,6 @@ def prefer_lower_case(folder: Path):
     formats = ["PNG", "JPEG", "JPG"]
     for file_format in formats:
         for f in folder.glob(f"*.{file_format}"):
-            print(f"renaming {f.name} with uppercase extention")
             f.rename(f.with_suffix(f".{file_format.lower()}"))
 
 
@@ -609,7 +610,6 @@ def prepare_images(manual_only: Optional[bool] = False):
 
 
 if __name__ == "__main__":
-
     args = sys.argv[1:]
     if len(args) == 0:
         args = ["all"]
@@ -619,21 +619,3 @@ if __name__ == "__main__":
             if p in args:
                 return True
         return False
-
-    if arg_test("fetch_all", "fetch_uk_parl"):
-        get_uk_parl_images()
-    if arg_test("fetch_all", "fetch_welsh_parl"):
-        get_welsh_parl_images()
-    if arg_test("fetch_official_all"):
-        get_uk_parl_images(override=True)
-        get_welsh_parl_images(override=True)
-    if arg_test("fetch_all", "fetch_wiki"):
-        get_wikipedia()
-        get_idless_wikipedia()
-        get_wikidata()
-    if arg_test("prepare"):
-        prepare_images()
-    if arg_test("manual"):
-        prepare_images(manual_only=True)
-    if arg_test("report"):
-        overlap_report()

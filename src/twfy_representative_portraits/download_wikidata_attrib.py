@@ -21,13 +21,12 @@ def extract_image_license(image_name: str):
     try:
         image_info = result["query"]["pages"][page_id]["imageinfo"]
         licence = image_info[0]["extmetadata"]["UsageTerms"]["value"]
-    except:
+    except Exception:
         licence = ""
     return licence
 
 
 def extract_wiki_license(image_name: str):
-
     start_of_end_point_str = (
         "https://en.wikipedia.org" "/w/api.php?action=query&titles=File:"
     )

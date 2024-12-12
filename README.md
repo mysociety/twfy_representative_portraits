@@ -2,11 +2,12 @@
 
 This is a repository to hold the portrait images used for representatives in TheyWorkForYou.
 
-`python process.py` will run through the process of checking the official API and wikipedia/wikidata looking for new images. Part of this can be run in turn with additional arguments:
+`portrait --help` will run through the process of checking the official API and wikipedia/wikidata looking for new images. Part of this can be run in turn with additional arguments:
 
+* `fetch_all` - Run all of the below.
 * `fetch_official_all` - download all official portraits and match to TWFY IDs.
-    * `fetch_uk_parl` - download missing official UK Parliament portraits and match to TWFY IDs.
-    * `fetch_welsh_parl` - download missing official Welsh Parliament portraits and match to TWFY IDs.
+* `fetch_uk_parl` - download missing official UK Parliament portraits and match to TWFY IDs.
+* `fetch_welsh_parl` - download missing official Welsh Parliament portraits and match to TWFY IDs.
 * `fetch_wiki` - fetch images from wikipedia based on TWFY ID, wikidata ID, or name (in some cases).
 * `prepare` - downscale the fetched images to the two sizes expected by TWFY.
 * `manual` - will only downscale images in the manual source directory, and pull down the attrib spreadsheet. 
