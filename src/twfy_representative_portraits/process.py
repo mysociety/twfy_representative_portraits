@@ -39,11 +39,13 @@ from PIL import Image, ExifTags
 from mysoc_validator import Popolo
 from mysoc_validator.models.popolo import IdentifierScheme
 from tqdm import tqdm
+from .face import resize_on_centerline
 
 small_image_folder = Path("web", "mps")
 large_image_folder = Path("web", "mpsL")
 uk_parl_image_folder = Path("source", "mpsOfficial")
 welsh_parl_image_folder = Path("source", "welshOfficial")
+scot_parl_image_folder = Path("source", "scotOfficial")
 wikidata_image_folder = Path("source", "mpsWikidata")
 manual_image_folder = Path("source", "manual")
 
@@ -412,7 +414,7 @@ def get_uk_parl_images(override: bool = False):
 
     attrib_path = Path("source", "attrib", "parliament_attrib.csv")
     df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
-    if attrib_path:
+    if attrib_path.exists():
         old_df = pd.read_csv(attrib_path)
         df = pd.concat([old_df, df])
     df["photo_attribution_text"] = "© Parliament (CC-BY 3.0)"
@@ -428,6 +430,43 @@ def get_text_from_element(e: ElementTree.Element | None) -> str:
     if txt is None:
         raise ValueError("Element has no text")
     return txt
+
+
+def get_scot_parl_images(override: bool = False):
+    lookup = get_identifier_lookup(IdentifierScheme.SCOTPARL)
+
+    if scot_parl_image_folder.exists() is False:
+        scot_parl_image_folder.mkdir()
+
+    api_url = "https://data.parliament.scot/api/members"
+    headers = {"User-Agent": "twfy-portrait-bot"}
+    response = requests.get(api_url, headers=headers)
+    data = response.json()
+    id_to_photo_url = {x["PersonID"]: x["PhotoURL"] for x in data if x.get("PhotoURL")}
+    urls: list[str] = []
+    ids: list[str] = []
+
+    for scotparl, parlparse in tqdm(
+        lookup.items(), desc="getting scottish parliament portraits"
+    ):
+        filename = f"{parlparse}.jpeg"
+        scot_parl_path = scot_parl_image_folder / filename
+        if scot_parl_path.exists() is False or override:
+            url = id_to_photo_url.get(int(scotparl))
+            if url:
+                urlretrieve(url, scot_parl_path)
+                urls.append(url)
+                ids.append(parlparse)
+
+        attrib_path = Path("source", "attrib", "scotparl_attrib.csv")
+        df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
+        if attrib_path.exists():
+            old_df = pd.read_csv(attrib_path)
+            df = pd.concat([old_df, df])
+        df["photo_attribution_text"] = "© Scottish Parliament (SPCL)"
+        # remove duplicates on person_id
+        df = df.drop_duplicates(subset=["person_id"])
+        df.to_csv(attrib_path, index=False)
 
 
 def get_welsh_parl_images(override: bool = False):
@@ -458,7 +497,7 @@ def get_welsh_parl_images(override: bool = False):
 
     attrib_path = Path("source", "attrib", "senedd_attrib.csv")
     df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
-    if attrib_path:
+    if attrib_path.exists():
         old_df = pd.read_csv(attrib_path)
         df = pd.concat([old_df, df])
     df["photo_attribution_text"] = "© Senedd (CC-BY 4.0)"
@@ -527,11 +566,15 @@ def downsize(image_path: Path, only_small: Optional[bool] = False):
         elif exif[orientation] == 8:
             image = image.rotate(90, expand=True)
 
-    if only_small is False:
-        large_image = pad_to_size(image, (120, 160))
+    if only_small:
+        small_image = pad_to_size(image, (60, 80))
+        small_image.save(small_path, quality=95)
+    else:
+        large_image = resize_on_centerline(image, (120, 160))
         large_image.save(large_path, quality=95)
-    small_image = pad_to_size(image, (60, 80))
-    small_image.save(small_path, quality=95)
+        small_image = large_image.resize((60, 80))
+        small_image.save(small_path, quality=95)
+
     image.close()
 
 
@@ -591,6 +634,7 @@ def prepare_images(manual_only: Optional[bool] = False):
     for f in [
         uk_parl_image_folder,
         welsh_parl_image_folder,
+        scot_parl_image_folder,
         wikidata_image_folder,
         manual_image_folder,
         large_image_folder,
@@ -602,6 +646,7 @@ def prepare_images(manual_only: Optional[bool] = False):
         copy_legacy()
         make_large_from_folder(wikidata_image_folder)
         make_large_from_folder(welsh_parl_image_folder)
+        make_large_from_folder(scot_parl_image_folder)
         make_large_from_folder(uk_parl_image_folder)
     make_large_from_folder(manual_image_folder)
     prefer_jpg(large_image_folder)
