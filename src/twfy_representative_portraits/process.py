@@ -583,7 +583,7 @@ def make_large_from_folder(folder: Path):
     for each file in folder, create files that match
     small and big size
     """
-    for f in folder.iterdir():
+    for f in tqdm(list(folder.iterdir()), desc=folder.name):
         downsize(f)
 
 
