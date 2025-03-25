@@ -3,7 +3,6 @@ name = "twfy-representative-portraits"
 version = "0.1.0"
 description = "Manage portrait source downloads"
 authors = ["Alex Parsons <alex.parsons@mysociety.org>"]
-readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
