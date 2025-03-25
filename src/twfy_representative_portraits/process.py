@@ -491,7 +491,9 @@ def get_welsh_parl_images(override: bool = False):
         filename = f"{parlparse}.jpeg"
         welsh_parl_path = welsh_parl_image_folder / filename
         if welsh_parl_path.exists() is False or override:
-            urlretrieve(image_url, welsh_parl_path)
+            response = requests.get(image_url, headers=headers)
+            with open(welsh_parl_path, "wb") as f:
+                f.write(response.content)
             urls.append(image_url)
             ids.append(parlparse)
 
