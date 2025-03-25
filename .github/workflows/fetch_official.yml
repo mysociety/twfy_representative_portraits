@@ -28,7 +28,7 @@ jobs:
           
       - name: execute py script
         run: |
-          portrait fetch_uk_parl
+          portrait fetch-official-all
           portrait prepare
 
       - name: Push new data
