@@ -6,7 +6,7 @@ authors = ["Alex Parsons <alex.parsons@mysociety.org>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-pillow = "7.0.0"
+pillow = "^11.1.0"
 wikipedia = "1.4.0"
 pandas = "1.4.2"
 numpy = "1.26.4"
