@@ -1,0 +1,9 @@
+services:
+  app:
+    image: mysociety/twfy_representative_portraits:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspaces/twfy_representative_portraits
+    volumes:
+      - ./:/workspaces/twfy_representative_portraits/
