@@ -443,6 +443,7 @@ def get_scot_parl_images(override: bool = False):
     response = requests.get(api_url, headers=headers)
     data = response.json()
     id_to_photo_url = {x["PersonID"]: x["PhotoURL"] for x in data if x.get("PhotoURL")}
+    request_delay_seconds = 1
     urls: list[str] = []
     ids: list[str] = []
 
@@ -454,19 +455,28 @@ def get_scot_parl_images(override: bool = False):
         if scot_parl_path.exists() is False or override:
             url = id_to_photo_url.get(int(scotparl))
             if url:
-                urlretrieve(url, scot_parl_path)
-                urls.append(url)
-                ids.append(parlparse)
+                try:
+                    image_response = requests.get(url, headers=headers, timeout=30)
+                    image_response.raise_for_status()
+                    with open(scot_parl_path, "wb") as f:
+                        f.write(image_response.content)
+                    urls.append(url)
+                    ids.append(parlparse)
+                except requests.RequestException as e:
+                    print(
+                        f"Could not fetch Scottish Parliament image for {parlparse}: {e}"
+                    )
+                time.sleep(request_delay_seconds)
 
-        attrib_path = Path("source", "attrib", "scotparl_attrib.csv")
-        df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
-        if attrib_path.exists():
-            old_df = pd.read_csv(attrib_path)
-            df = pd.concat([old_df, df])
-        df["photo_attribution_text"] = "© Scottish Parliament (SPCL)"
-        # remove duplicates on person_id
-        df = df.drop_duplicates(subset=["person_id"])
-        df.to_csv(attrib_path, index=False)
+    attrib_path = Path("source", "attrib", "scotparl_attrib.csv")
+    df = pd.DataFrame({"person_id": ids, "photo_attribution_link": urls})
+    if attrib_path.exists():
+        old_df = pd.read_csv(attrib_path)
+        df = pd.concat([old_df, df])
+    df["photo_attribution_text"] = "© Scottish Parliament (SPCL)"
+    # remove duplicates on person_id
+    df = df.drop_duplicates(subset=["person_id"])
+    df.to_csv(attrib_path, index=False)
 
 
 def get_welsh_parl_images(override: bool = False):
